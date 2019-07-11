@@ -1,0 +1,17 @@
+20 minutes before to 5 minutes after to find a glucose value if you find a sensor glucose error (patient did not calibrate sensor)
+
+just graph the data first for each day
+	mean stdev error bars later
+
+put on same scale (0 - 300)
+put on same graph
+
+separate breakfast and dinner
+	1 hour before each breakfast bolus to 3 hours after
+	1 hour before each dinner to 8 hours after
+
+	meal bolus -> t = 0
+		first, don't scale (raw glucose values)
+		if appropriate, use deltas 
+
+annotate how clean or dirty the data is (e.g. correction boluses in the graph)
