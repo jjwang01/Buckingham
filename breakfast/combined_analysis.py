@@ -7,11 +7,16 @@ import os
 import fnmatch
 import datetime
 from dateutil import parser
+import warnings
 
-root_dir = '/mnt/c/Users/xSix.SixAxiS/Documents/Stanford/Research/Buckingham/breakfast'
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+root_dir = '/mnt/c/Users/xSix.SixAxiS/Documents/Stanford/Research/Buckingham/meal_analysis'
 predictions = 'Fiasp 670G Meal Scoring_MD Predictions.xlsx'
-bolus = pd.read_excel('{}/{}'.format(root_dir, predictions), sheet_name='Sheet1', parse_dates=[['Date', 'Time']])
+bolus = pd.read_excel('{}/{}'.format(root_dir, predictions), sheet_name='Sheet1', skiprows=1, parse_dates=[['Date', 'Time']])
 bolus = bolus.loc[:, ~bolus.columns.str.contains('^Unnamed')]
+
+results = []
 
 for index, row in bolus.iterrows():
     # search for appropriate csv file in 'CSV Files'
@@ -47,7 +52,7 @@ for index, row in bolus.iterrows():
     u_cols = ['Date', 'Time', 'Timestamp','Bolus Type', 'Bolus Volume Selected (U)', 'Bolus Volume Delivered (U)', 'Sensor Glucose (mg/dL)']
 
     data = pd.read_csv(
-                        datafile, 
+                        'CSV Files/{}'.format(datafile), 
                         skiprows=range(11),
                         usecols=u_cols,
                         )
@@ -56,23 +61,22 @@ for index, row in bolus.iterrows():
     begin_date = data.iloc[1]['Date']
     end_date = data.iloc[-1]['Date']
 
-# drop all the rows that don't give us any valuable information regarding blood glucose and insulin boluses
+    # drop all the rows that don't give us any valuable information regarding blood glucose and insulin boluses
     data = data.dropna(thresh=4)
     data = data.reset_index()
 
-    import matplotlib.pyplot as plt
-
-    meal = data[(data['Date'] == bolus.iloc[0]['Date_Time'].date())
-                 & (data['Timestamp'] >= bolus.iloc[0]['Date_Time'] - datetime.timedelta(hours=1)) 
-                 & (data['Timestamp'] <= bolus.iloc[0]['Date_Time'] + datetime.timedelta(hours=3))]
+    meal = data[(data['Date'] == bolus.iloc[index]['Date_Time'].date())
+                 & (data['Timestamp'] >= bolus.iloc[index]['Date_Time'] - datetime.timedelta(hours=1)) 
+                 & (data['Timestamp'] <= bolus.iloc[index]['Date_Time'] + datetime.timedelta(hours=3))]
     meal = meal.dropna(subset=['Sensor Glucose (mg/dL)'])
-    meal['Time_delta'] = meal['Timestamp'] - bolus.iloc[0]['Date_Time']
-    print(meal.head())
+    meal['Time_delta'] = meal['Timestamp'] - bolus.iloc[index]['Date_Time']
+    #print(meal.head())
 
+    """
     ax = meal.plot(kind='line', x ='Time_delta', y='Sensor Glucose (mg/dL)', color='red')
     plt.ylim(0,300)
     plt.show()
-
+    """
 
     possible_baseline_glucoses = meal[(meal['Timestamp'] >= bolus.iloc[0]['Date_Time'] - datetime.timedelta(minutes=20)) & 
                                           (meal['Timestamp'] <= (bolus.iloc[0]['Date_Time'] + datetime.timedelta(minutes=5))) & 
@@ -80,7 +84,7 @@ for index, row in bolus.iterrows():
 
     baseline_glucose = 0
     min_time_diff = datetime.timedelta(hours=1)
-# for each possible baseline value, check which timestamp is closest to insulin bolus time
+    # for each possible baseline value, check which timestamp is closest to insulin bolus time
     for index, possible_baseline in possible_baseline_glucoses.iterrows():
         time_diff = abs(possible_baseline['Timestamp'] - bolus.iloc[0]['Date_Time'])
         if time_diff < min_time_diff:
@@ -88,8 +92,8 @@ for index, row in bolus.iterrows():
             baseline_glucose = possible_baseline['Sensor Glucose (mg/dL)']
 
 
-# within the next 1:30, we need to look for the maximum glucose level, minimum glucose level,
-# don't forget to record the T_max and T_1/2max
+    # within the next 1:30, we need to look for the maximum glucose level, minimum glucose level,
+    # don't forget to record the T_max and T_1/2max
     bolus_time = meal.iloc[0]['Timestamp']
     glucose_max = 0
     delta_max = 0
@@ -120,19 +124,25 @@ for index, row in bolus.iterrows():
             T_halfmax = entry['Timestamp']
             break
 
-# add new columns 'Glucose_delta' and 'Time-delta' to plot later on
+    # add new columns 'Glucose_delta' and 'Time-delta' to plot later on
     meal_period['Time_delta'] = meal_period['Timestamp'] - bolus_time
     meal_period['Glucose_delta'] = meal_period['Sensor Glucose (mg/dL)'] - baseline_glucose
 
-# calculating area under curve with scaled glucose values using numpy.trapz(array/list, dx)
-# each glucose value isn't recorded at regular intervals, so how to deal with that?
-# just using dx=1 for now
+    # calculating area under curve with scaled glucose values using numpy.trapz(array/list, dx)
+    # each glucose value isn't recorded at regular intervals, so how to deal with that?
+    # just using dx=1 for now
     auc = np.trapz(list(meal_period['Glucose_delta'].dropna()), dx=1) 
 
     result = [bolus, bolus_time, baseline_glucose, glucose_max, delta_max, T_max, glucose_min, delta_min, T_min, T_halfmax, auc]
 
+    results.append(result)
 
-    plt.figure()
+    #plt.figure()
 
-    meal_period_graph = meal_period.dropna(subset=['Glucose_delta'])
-    ax = meal_period_graph.plot(kind='line', x='Time_delta', y='Glucose_delta')
+    #meal_period_graph = meal_period.dropna(subset=['Glucose_delta'])
+    #ax = meal_period_graph.plot(kind='line', x='Time_delta', y='Glucose_delta')
+
+df = pd.DataFrame(data=results, columns=['Bolus', 'Bolus Time', 'Baseline Glucose', 'Glucose max', 'Delta max', 'T max',
+    'Delta min', 'T min', 'T halfmax', 'AUC'])
+
+df.to_csv('result_metrics.csv')
