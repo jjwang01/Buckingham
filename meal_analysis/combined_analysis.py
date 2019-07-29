@@ -57,7 +57,7 @@ for index, row in carelink.iterrows():
         if date_time >= datetime_start and date_time <= datetime_end + datetime.timedelta(days=1):
             datafile = f
 
-    u_cols = ['Date', 'Time', 'Timestamp','Bolus Type', 'Bolus Volume Selected (U)', 'Bolus Volume Delivered (U)', 'Sensor Glucose (mg/dL)']
+    u_cols = ['Date', 'Time', 'Timestamp', 'Sensor Glucose (mg/dL)']
 
     data = pd.read_csv(
                         'CSV Files/{}'.format(datafile), 
@@ -124,6 +124,7 @@ for index, row in carelink.iterrows():
         # captures the first instance of a glucose reading at 1/2 max
         if (entry['Sensor Glucose (mg/dL)'] <= glucose_halfmax + 1) or (entry['Sensor Glucose (mg/dL)'] >= glucose_halfmax - 1):
             T_halfmax = entry['Timestamp'] - bolus_time
+            print(T_halfmax)
             break
 
     # add new columns 'Glucose_delta' and 'Time-delta' to plot later on
