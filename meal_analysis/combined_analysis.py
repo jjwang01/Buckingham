@@ -11,7 +11,8 @@ import warnings
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-root_dir = '/mnt/c/Users/xSix.SixAxiS/Documents/Stanford/Research/Buckingham/meal_analysis'
+#root_dir = '/mnt/c/Users/xSix.SixAxiS/Documents/Stanford/Research/Buckingham/meal_analysis'
+root_dir = '~/Desktop/Buckingham/meal_analysis'
 predictions = 'Fiasp 670G Meal Scoring_MD Predictions.xlsx'
 carelink = pd.read_excel('{}/{}'.format(root_dir, predictions), sheet_name='Sheet1', skiprows=1, parse_dates=[['Date', 'Time']])
 carelink = carelink.loc[:, ~carelink.columns.str.contains('^Unnamed')]
@@ -29,7 +30,8 @@ for index, row in carelink.iterrows():
 
     pattern = '{}_Insulin[12]_*'.format(subject)
     
-    files = os.listdir('{}/CSV Files'.format(root_dir))
+    #files = os.listdir('{}/CSV Files'.format(root_dir))
+    files = os.listdir('CSV Files')
     possible = fnmatch.filter(files, pattern)
    
     datafile = None
@@ -103,6 +105,7 @@ for index, row in carelink.iterrows():
     glucose_min = sys.maxsize
     delta_min = 0
     T_min = 0
+    glucose_halfmax = 0
     T_halfmax = 0
 
     meal_period = meal[(meal['Timestamp'] <= (bolus_time + datetime.timedelta(hours=1, minutes=30))) &
@@ -119,13 +122,24 @@ for index, row in carelink.iterrows():
     delta_max = glucose_max - baseline_glucose
     delta_min = glucose_min - baseline_glucose
 
-    glucose_halfmax = baseline_glucose + delta_max / 2
+    delta_diff = sys.maxsize
     for index, entry in meal_period.iterrows():
         # captures the first instance of a glucose reading at 1/2 max
-        if (entry['Sensor Glucose (mg/dL)'] <= glucose_halfmax + 1) or (entry['Sensor Glucose (mg/dL)'] >= glucose_halfmax - 1):
-            T_halfmax = entry['Timestamp'] - bolus_time
-            print(T_halfmax)
+        # TODO: FIGURE OUT WHY THE FOLLOWING IF STATEMENT ISN'T BEING FOLLOWED THROUGH!
+
+        # find the entry where the difference between the max and x, and x and baseline are the closest
+        # must be before glucose hits maximum
+        if entry['Sensor Glucose (mg/dL)'] < glucose_max:
+            baseline_to_x = entry['Sensor Glucose (mg/dL)'] - baseline_glucose
+            x_to_max = glucose_max - entry['Sensor Glucose (mg/dL)']
+
+            if abs(baseline_to_x - x_to_max) < delta_diff:
+                glucose_halfmax = entry['Sensor Glucose (mg/dL)']
+                T_halfmax = entry['Timestamp'] - bolus_time
+                delta_diff = abs(baseline_to_x - x_to_max)
+        else:
             break
+    print(glucose_halfmax, T_halfmax)
 
     # add new columns 'Glucose_delta' and 'Time-delta' to plot later on
     meal_period['Time_delta'] = meal_period['Timestamp'] - bolus_time
@@ -136,7 +150,7 @@ for index, row in carelink.iterrows():
     # just using dx=1 for now
     auc = np.trapz(list(meal_period['Glucose_delta'].dropna()), dx=1) 
 
-    result = [bolus_time, baseline_glucose, glucose_max, delta_max, T_max, glucose_min, delta_min, T_min, T_halfmax, auc]
+    result = [bolus_time, baseline_glucose, glucose_max, delta_max, T_max, glucose_min, delta_min, T_min, glucose_halfmax, T_halfmax, auc]
 
     results.append(result)
 
@@ -148,6 +162,6 @@ for index, row in carelink.iterrows():
     #ax = meal_period_graph.plot(kind='line', x='Time_delta', y='Glucose_delta')
 
 df = pd.DataFrame(data=results, columns=['Bolus Time', 'Baseline Glucose', 'Glucose max', 'Delta max', 'T max',
-    'Glucose min', 'Delta min', 'T min', 'T halfmax', 'AUC'])
+    'Glucose min', 'Delta min', 'T min', 'Glucose halfmax', 'T halfmax', 'AUC'])
 
 df.to_csv('result_metrics.csv')
